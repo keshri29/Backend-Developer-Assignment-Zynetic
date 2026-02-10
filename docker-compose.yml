@@ -1,0 +1,62 @@
+# Create docker-compose.yml with the following content:
+@'
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: energy-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: securepassword
+      POSTGRES_DB: energy_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+
+  redis:
+    image: redis:7-alpine
+    container_name: energy-redis
+    ports:
+      - "6379:6379"
+
+  app:
+    build: .
+    container_name: energy-ingestion-api
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://admin:securepassword@postgres:5432/energy_db
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./src:/app/src
+
+volumes:
+  postgres_data:
+'@ | Out-File -FilePath docker-compose.yml -Encoding UTF8
+
+
+# Create Dockerfile with the following content:
+@'
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+COPY tsconfig.json ./
+
+RUN npm ci --only=production
+
+COPY . .
+
+RUN npm run build
+
+EXPOSE 3000
+
+CMD ["node", "dist/main.js"]
+'@ | Out-File -FilePath Dockerfile -Encoding UTF8
